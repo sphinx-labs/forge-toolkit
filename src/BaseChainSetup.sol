@@ -13,13 +13,12 @@ contract BaseChainSetup is CommonBase {
     string constant ENV_TESTNET = "testnet";
     string constant ENV_MAINNET = "mainnet";
 
-    bool broadcasting = false;
-
     mapping(string => uint256) forkLookup;
     mapping(string => bool) gasEthLookup;
     mapping(string => address) wethLookup;
     mapping(string => address) wrappedLookup;
     mapping(string => uint256) chainIdLookup;
+    mapping(uint256 => string) networkLookup;
 
     function wethBalance(
         string memory chain,
@@ -131,12 +130,13 @@ contract BaseChainSetup is CommonBase {
         }
         wrappedLookup[chain] = wrapped;
         chainIdLookup[chain] = chainId;
+        networkLookup[chainId] = chain;
     }
 
     function stopImpersonating() internal {
         if (isForgeTest()) {
             vm.stopPrank();
-        } else {
+        } else if (isForkRuntime()) {
             vm.stopBroadcast();
             vm.startBroadcast();
         }
@@ -147,22 +147,14 @@ contract BaseChainSetup is CommonBase {
             revert("no chain specified");
         }
 
-        if (!isForgeTest() && broadcasting) {
-            vm.stopBroadcast();
-            broadcasting = false;
+        // Select the fork if it isn't already active.
+        if (block.chainid != chainIdLookup[chain]) {
+            uint forkId = forkLookup[chain];
+            vm.selectFork(forkId);
         }
-
-        uint forkId = forkLookup[chain];
-
-        vm.selectFork(forkId);
 
         if (block.chainid != chainIdLookup[chain]) {
             revert(string.concat("chainId mismatch for chain: ", chain));
-        }
-
-        if (!isForgeTest()) {
-            vm.startBroadcast();
-            broadcasting = true;
         }
     }
 
